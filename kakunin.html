@@ -9,7 +9,7 @@ h1{font-size:21px;margin:4px 0 10px}h2{font-size:17px;margin:18px 0 8px;color:#3
 .card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .small{font-size:13px;color:#666}
 .badge{display:inline-block;font-size:13px;padding:2px 8px;border-radius:10px;margin-right:6px;background:#e3f2fd;color:#0d47a1}
-.badge.rep{background:#fff3e0;color:#e65100;font-weight:bold}.badge.warn{background:#ffebee;color:#b71c1c}
+.badge.gai{background:#ede7f6;color:#4527a0}.badge.rep{background:#fff3e0;color:#e65100;font-weight:bold}.badge.warn{background:#ffebee;color:#b71c1c}
 input[type=text],input[type=password],select{width:100%;font-size:17px;padding:10px;border:1px solid #bbb;border-radius:8px;background:#fff;margin-top:6px}
 .btn{display:block;width:100%;font-size:18px;font-weight:bold;padding:14px;border:0;border-radius:12px;margin-top:10px;color:#fff;background:#2e7d32;text-align:center;text-decoration:none}
 .btn[disabled]{background:#9e9e9e}.btn.sub{background:#607d8b;font-size:15px;padding:9px;margin-top:8px}
@@ -56,6 +56,7 @@ var KEY="kakunin_pass_v1", D=null, SEL=null, PASS="";
 function $(i){return document.getElementById(i)}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function showErr(m){var e=$("err");e.textContent=m||"";e.style.display=m?"block":"none"}
+function whoBadge(w){if(!w)return"";var me=(w==="自分");return '<span class="badge'+(me?"":" gai")+'">'+(me?"自分":"外注："+esc(w))+'</span>'}
 function getPass(){try{return localStorage.getItem(KEY)||""}catch(e){return ""}}
 function setPass(v){try{if(v)localStorage.setItem(KEY,v);else localStorage.removeItem(KEY)}catch(e){}}
 
@@ -91,16 +92,16 @@ function renderFollow(){var f=$("follow");f.innerHTML="";
  D.follow.forEach(function(x){var b=document.createElement("div");b.className="card";
   var st=x.status==="返信あり"?'<span class="badge rep">返信あり</span>':x.status==="作成済"?'<span class="badge warn">未送信</span>':'<span class="badge">送信済</span>';
   var dd=(x.days!==""?"稼働"+x.days+"日":"")+(x.days!==""&&x.days>=D.alertDays&&x.status!=="返信あり"?" ⚠催促":"");
-  b.innerHTML=st+'<b>'+esc(x.kind)+'</b> <span class="small">'+esc(dd)+(x.manual?"・手入力":"")+'</span><div style="margin-top:4px">'+esc(x.case)+'</div>';
+  b.innerHTML=st+'<b>'+esc(x.kind)+'</b> <span class="small">'+esc(dd)+(x.manual?"・手入力":"")+'</span>'+whoBadge(x.who)+'<div style="margin-top:4px">'+esc(x.case)+'</div>';
   var bt=document.createElement("button");bt.className="btn sub";bt.textContent="解決（追跡を終える）";
   bt.onclick=function(){if(!confirm("解決にしますか？"))return;bt.disabled=true;
    call("resolve",{row:x.row,memo:""}).then(function(){b.remove()}).catch(function(e){bt.disabled=false;alert(e.message||e)})};
   b.appendChild(bt);f.appendChild(b)})}
 
 function renderList(){var q=$("q").value.replace(/[\s　]+/g,"").toLowerCase(),L=$("list");L.innerHTML="";
- var n=0;D.cases.forEach(function(c){var t=(c.case+c.police+c.name+c.vin).replace(/[\s　]+/g,"").toLowerCase();
+ var n=0;D.cases.forEach(function(c){var t=(c.case+c.police+c.name+c.vin+(c.who||"")).replace(/[\s　]+/g,"").toLowerCase();
   if(q&&t.indexOf(q)<0)return;n++;var d=document.createElement("div");d.className="item"+(SEL&&SEL.vin===c.vin&&!SEL.manual?" sel":"");
-  d.textContent=c.case;d.onclick=function(){SEL={vin:c.vin,case:c.case,police:c.police,name:c.name,manual:false};choose()};L.appendChild(d)});
+  d.innerHTML=whoBadge(c.who)+esc(c.case);d.onclick=function(){SEL={vin:c.vin,case:c.case,police:c.police,name:c.name,manual:false};choose()};L.appendChild(d)});
  if(!n)L.innerHTML='<div class="small" style="padding:8px">該当なし。下の「手入力」を使ってください</div>'}
 function choose(){$("selmsg").textContent="選択中："+(SEL.case||(SEL.police+" "+SEL.name+" "+SEL.vin))+(SEL.manual?"（手入力）":"");$("make").disabled=false;renderList()}
 $("q").oninput=renderList;
