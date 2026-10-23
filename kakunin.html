@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>ガリバー確認メール</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Hiragino Sans",sans-serif;background:#f4f6f8;color:#1a1a1a;font-size:17px}
+.wrap{max-width:600px;margin:0 auto;padding:14px}
+h1{font-size:21px;margin:4px 0 10px}h2{font-size:17px;margin:18px 0 8px;color:#333}
+.card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.small{font-size:13px;color:#666}
+.badge{display:inline-block;font-size:13px;padding:2px 8px;border-radius:10px;margin-right:6px;background:#e3f2fd;color:#0d47a1}
+.badge.rep{background:#fff3e0;color:#e65100;font-weight:bold}.badge.warn{background:#ffebee;color:#b71c1c}
+input[type=text],input[type=password],select{width:100%;font-size:17px;padding:10px;border:1px solid #bbb;border-radius:8px;background:#fff;margin-top:6px}
+.btn{display:block;width:100%;font-size:18px;font-weight:bold;padding:14px;border:0;border-radius:12px;margin-top:10px;color:#fff;background:#2e7d32;text-align:center;text-decoration:none}
+.btn[disabled]{background:#9e9e9e}.btn.sub{background:#607d8b;font-size:15px;padding:9px;margin-top:8px}
+.btn.alt{background:#1565c0;font-size:15px;padding:10px}
+.item{padding:10px;border:1px solid #ddd;border-radius:8px;margin-top:6px;background:#fff}.item.sel{border-color:#2e7d32;background:#e8f5e9}
+#list{max-height:260px;overflow:auto}details summary{font-size:15px;color:#1565c0;margin-top:10px}
+.msg{padding:10px;border-radius:8px;margin-top:8px;display:none}.err{background:#ffebee;color:#b71c1c}.ok{background:#e8f5e9;color:#1b5e20}
+</style></head><body><div class="wrap">
+<h1>ガリバー確認メール</h1>
+
+<div id="login" class="card" style="display:none">
+<div>合言葉を入れてください（この端末に1回だけ保存されます）</div>
+<input type="password" id="pw" autocomplete="off">
+<div id="lerr" class="msg err"></div>
+<button class="btn" id="loginBtn" type="button">入る</button>
+</div>
+
+<div id="app" style="display:none">
+<div id="stale" class="msg err" style="font-weight:bold"></div>
+<div class="small" id="sync"></div>
+<h2>返信待ちの案件</h2><div id="follow"><div class="small">読み込み中…</div></div>
+<h2>新しい確認メールを作る</h2>
+<div class="card">
+<input type="text" id="q" placeholder="氏名・署・車台番号で絞り込み">
+<div id="list"></div>
+<div id="selmsg" class="small" style="margin-top:6px">案件を選んでください（納品日が未入力の案件）</div>
+<details><summary>一覧に無い案件は手入力</summary>
+<input type="text" id="m_name" placeholder="お客様の氏名（例：河邊哲）">
+<input type="text" id="m_vin" placeholder="車台番号（例：GFC28-181736）">
+<input type="text" id="m_police" placeholder="警察署名（任意）">
+<button class="btn sub" id="useManual" type="button">この内容で進める</button>
+</details>
+<select id="kind"></select>
+<div id="err" class="msg err"></div>
+<button class="btn" id="make" type="button" disabled>確認メールの作成画面を開く</button>
+<div id="after" class="msg ok"></div>
+</div>
+<button class="btn sub" id="logout" type="button">この端末の合言葉を消す</button>
+</div>
+</div>
+<script>
+var API="https://script.google.com/macros/s/AKfycbysODh739EQsx-ok026mPylaCqP5dLD1ts8PABv4Da0b5ZkSaIeRKtj4rPg6qTmN-OsZA/exec";
+var KEY="kakunin_pass_v1", D=null, SEL=null, PASS="";
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function showErr(m){var e=$("err");e.textContent=m||"";e.style.display=m?"block":"none"}
+function getPass(){try{return localStorage.getItem(KEY)||""}catch(e){return ""}}
+function setPass(v){try{if(v)localStorage.setItem(KEY,v);else localStorage.removeItem(KEY)}catch(e){}}
+
+function call(op,extra){
+  var body=JSON.stringify(Object.assign({action:"kakunin",pass:PASS,op:op},extra||{}));
+  return fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:body,redirect:"follow"})
+    .then(function(r){return r.json()})
+    .then(function(j){if(!j.ok){var e=new Error(j.error==="auth"?"合言葉が違います":(j.error||"エラー"));e.auth=(j.error==="auth");throw e}return j.data})}
+
+function start(){
+  PASS=getPass();
+  if(!PASS){$("login").style.display="block";$("app").style.display="none";return}
+  $("login").style.display="none";$("app").style.display="block";
+  load();
+}
+function load(){
+  return call("init").then(function(d){D=d;
+    var st=$("stale");
+    if(d.staleHours===null||d.staleHours>=24){st.style.display="block";st.textContent="⚠ 案件一覧が古い可能性があります（最終同期から"+(d.staleHours===null?"不明":d.staleHours+"時間")+"）。新しい案件が出ないときは、下の「手入力」を使ってください。"}else{st.style.display="none"}
+    $("sync").textContent="案件一覧は "+(d.synced||"（未同期）")+" のPC同期の時点のものです"+(d.to?"":"　⚠宛先未設定");
+    var k=$("kind");if(!k.options.length){d.kinds.forEach(function(x){var o=document.createElement("option");o.value=x;o.textContent="種類："+x;k.appendChild(o)})}
+    renderFollow();renderList();
+  }).catch(function(e){
+    if(e.auth){setPass("");$("app").style.display="none";$("login").style.display="block";var le=$("lerr");le.textContent="合言葉が違います";le.style.display="block"}
+    else{$("follow").textContent="読み込めませんでした："+(e&&e.message?e.message:e)}
+  });
+}
+$("loginBtn").onclick=function(){var v=$("pw").value.trim();if(!v)return;setPass(v);$("lerr").style.display="none";start()};
+$("logout").onclick=function(){setPass("");location.reload()};
+
+function renderFollow(){var f=$("follow");f.innerHTML="";
+ if(!D.follow.length){f.innerHTML='<div class="small">返信待ちの案件はありません</div>';return}
+ D.follow.forEach(function(x){var b=document.createElement("div");b.className="card";
+  var st=x.status==="返信あり"?'<span class="badge rep">返信あり</span>':x.status==="作成済"?'<span class="badge warn">未送信</span>':'<span class="badge">送信済</span>';
+  var dd=(x.days!==""?"稼働"+x.days+"日":"")+(x.days!==""&&x.days>=D.alertDays&&x.status!=="返信あり"?" ⚠催促":"");
+  b.innerHTML=st+'<b>'+esc(x.kind)+'</b> <span class="small">'+esc(dd)+(x.manual?"・手入力":"")+'</span><div style="margin-top:4px">'+esc(x.case)+'</div>';
+  var bt=document.createElement("button");bt.className="btn sub";bt.textContent="解決（追跡を終える）";
+  bt.onclick=function(){if(!confirm("解決にしますか？"))return;bt.disabled=true;
+   call("resolve",{row:x.row,memo:""}).then(function(){b.remove()}).catch(function(e){bt.disabled=false;alert(e.message||e)})};
+  b.appendChild(bt);f.appendChild(b)})}
+
+function renderList(){var q=$("q").value.replace(/[\s　]+/g,"").toLowerCase(),L=$("list");L.innerHTML="";
+ var n=0;D.cases.forEach(function(c){var t=(c.case+c.police+c.name+c.vin).replace(/[\s　]+/g,"").toLowerCase();
+  if(q&&t.indexOf(q)<0)return;n++;var d=document.createElement("div");d.className="item"+(SEL&&SEL.vin===c.vin&&!SEL.manual?" sel":"");
+  d.textContent=c.case;d.onclick=function(){SEL={vin:c.vin,case:c.case,police:c.police,name:c.name,manual:false};choose()};L.appendChild(d)});
+ if(!n)L.innerHTML='<div class="small" style="padding:8px">該当なし。下の「手入力」を使ってください</div>'}
+function choose(){$("selmsg").textContent="選択中："+(SEL.case||(SEL.police+" "+SEL.name+" "+SEL.vin))+(SEL.manual?"（手入力）":"");$("make").disabled=false;renderList()}
+$("q").oninput=renderList;
+$("useManual").onclick=function(){var v=$("m_vin").value.trim(),n=$("m_name").value.trim();
+ if(!v||!n){showErr("氏名と車台番号を入れてください");return}showErr("");
+ SEL={vin:v,case:"",police:$("m_police").value.trim(),name:n,manual:true};choose()};
+$("make").onclick=function(){showErr("");if(!SEL)return;var b=$("make");b.disabled=true;b.textContent="準備しています…";
+ call("compose",{args:{vin:SEL.vin,case:SEL.case,police:SEL.police,name:SEL.name,manual:SEL.manual,kind:$("kind").value}}).then(function(r){
+  b.textContent="確認メールの作成画面を開く";
+  var a=$("after");a.style.display="block";
+  var mt="mailto:"+encodeURIComponent(r.to||"")+"?subject="+encodeURIComponent(r.subject)+"&body="+encodeURIComponent(r.body||"");
+  a.innerHTML='記録しました。下のボタンでメールの作成画面が開きます。内容を書き足して送信してください。'+(r.noTo?'<br>⚠宛先が未設定です。':'')+
+   '<a class="btn" target="_blank" rel="noopener" href="'+r.url.replace(/"/g,"&quot;")+'">Gmailで作成画面を開く</a>'+
+   '<a class="btn alt" href="'+mt.replace(/"/g,"&quot;")+'">うまく開かないとき：メールアプリで開く</a>';
+  SEL=null;$("selmsg").textContent="案件を選んでください";load();
+ }).catch(function(e){showErr("作成できませんでした："+(e&&e.message?e.message:e));b.disabled=false;b.textContent="確認メールの作成画面を開く"})};
+start();
+</script></body></html>
