@@ -1,0 +1,116 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>銀行照合</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Hiragino Sans",sans-serif;background:#f4f6f8;color:#1a1a1a;font-size:17px}
+.wrap{max-width:600px;margin:0 auto;padding:14px}
+h1{font-size:21px;margin:4px 0 10px}h2{font-size:17px;margin:18px 0 8px;color:#333}
+.card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.small{font-size:13px;color:#666}
+input[type=password],input[type=file]{width:100%;font-size:17px;padding:10px;border:1px solid #bbb;border-radius:8px;background:#fff;margin-top:6px}
+.btn{display:block;width:100%;font-size:18px;font-weight:bold;padding:14px;border:0;border-radius:12px;margin-top:10px;color:#fff;background:#2e7d32;text-align:center}
+.btn[disabled]{background:#9e9e9e}.btn.sub{background:#607d8b;font-size:15px;padding:9px;margin-top:8px}
+.msg{padding:10px;border-radius:8px;margin-top:8px;display:none}.err{background:#ffebee;color:#b71c1c}
+.line{font-size:15px;line-height:1.6;padding:6px 0;border-bottom:1px solid #eee}
+.bad{color:#b71c1c}.good{color:#2e7d32}.mute{color:#666}
+.head{margin-top:14px;padding:14px;border-radius:8px;font-weight:bold;color:#fff}
+</style></head><body><div class="wrap">
+<h1>銀行照合</h1>
+
+<div id="login" class="card" style="display:none">
+<div>合言葉を入れてください（この端末に1回だけ保存されます）</div>
+<input type="password" id="pw" autocomplete="off">
+<div id="lerr" class="msg err"></div>
+<button class="btn" id="loginBtn" type="button">入る</button>
+</div>
+
+<div id="app" style="display:none">
+<div class="card">
+<div>銀行アプリで保存した入出金のCSVを選んでください（月1回、前月分）。出金と、外注の支払い記録をつき合わせます。</div>
+<input type="file" id="file" accept=".csv,text/csv,text/plain">
+<div id="err" class="msg err"></div>
+</div>
+<div id="result"></div>
+<button class="btn sub" id="logout" type="button">この端末の合言葉を消す</button>
+</div>
+</div>
+<script>
+var API="https://script.google.com/macros/s/AKfycbysODh739EQsx-ok026mPylaCqP5dLD1ts8PABv4Da0b5ZkSaIeRKtj4rPg6qTmN-OsZA/exec";
+var KEY="kakunin_pass_v1", PASS="";   // ガリバー確認メールと同じ合言葉・同じ保存場所
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function fmt(n){return Number(n).toLocaleString("ja-JP")}
+function md(d){return d.slice(5).replace("-","/")}
+function getPass(){try{return localStorage.getItem(KEY)||""}catch(e){return ""}}
+function setPass(v){try{if(v)localStorage.setItem(KEY,v);else localStorage.removeItem(KEY)}catch(e){}}
+function showErr(m){var e=$("err");e.textContent=m||"";e.style.display=m?"block":"none"}
+
+function call(op,extra){
+  var body=JSON.stringify(Object.assign({action:"ginko",pass:PASS,op:op},extra||{}));
+  return fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:body,redirect:"follow"})
+    .then(function(r){return r.json()})
+    .then(function(j){if(!j.ok){var e=new Error(j.error==="auth"?"合言葉が違います":(j.error||"エラー"));e.auth=(j.error==="auth");throw e}return j.data})}
+
+function start(){
+  PASS=getPass();
+  if(!PASS){$("login").style.display="block";$("app").style.display="none";return}
+  $("login").style.display="none";$("app").style.display="block";
+}
+$("loginBtn").onclick=function(){var v=$("pw").value.trim();if(!v)return;setPass(v);$("lerr").style.display="none";start()};
+$("logout").onclick=function(){setPass("");location.reload()};
+
+$("file").onchange=function(){
+  var f=this.files[0];if(!f)return;showErr("");
+  $("result").innerHTML='<div class="small" style="margin-top:12px">読み込み中…</div>';
+  var r=new FileReader();
+  r.onload=function(){
+    var buf=r.result,text;
+    try{text=new TextDecoder("utf-8",{fatal:true}).decode(buf)}catch(e){text=new TextDecoder("shift_jis").decode(buf)}
+    $("result").innerHTML='<div class="small" style="margin-top:12px">照合中…</div>';
+    call("check",{csv:text}).then(render).catch(function(e){
+      $("result").innerHTML="";
+      if(e.auth){setPass("");$("app").style.display="none";$("login").style.display="block";var le=$("lerr");le.textContent="合言葉が違います";le.style.display="block"}
+      else showErr("照合できませんでした："+(e&&e.message?e.message:e));
+    });
+  };
+  r.readAsArrayBuffer(f);
+};
+
+function line(box,html,cls){var d=document.createElement("div");d.className="line "+(cls||"");d.innerHTML=html;box.appendChild(d);return d}
+function section(box,t){var h=document.createElement("h2");h.textContent=t;box.appendChild(h)}
+function render(res){
+  var box=$("result");box.innerHTML="";
+  var bad=res.bankOnly.length+res.formOnly.length;
+  var h=document.createElement("div");h.className="head";h.style.background=bad?"#d32f2f":"#388e3c";
+  h.textContent=bad?("要確認 "+bad+"件"):"✅ すべて合っています";box.appendChild(h);
+  var s=document.createElement("div");s.className="small";
+  s.textContent="対象期間 "+res.range+"／出金 "+res.nBank+"件（手数料・税・カード引落など "+res.ignored+"件は対象外）";box.appendChild(s);
+
+  if(res.bankOnly.length){
+    section(box,"■ 出金したのに、支払い記録が無い（記録漏れの疑い）");
+    res.bankOnly.forEach(function(b){
+      var d=line(box,md(b.date)+"　"+fmt(b.amount)+"円　"+esc(b.name),"bad");
+      var bt=document.createElement("button");bt.className="btn sub";bt.type="button";bt.textContent="説明がつく（次回から出さない）";
+      bt.onclick=function(){var m=prompt("理由をひとこと（例：外注ではない／レタパ代の精算）");if(m===null)return;bt.disabled=true;
+        call("memo",{date:b.date,amount:b.amount,name:b.name,memo:m,allow:0}).then(function(){bt.textContent="メモしました"}).catch(function(e){bt.disabled=false;alert(e.message||e)})};
+      d.appendChild(bt)});
+  }
+  if(res.formOnly.length){
+    section(box,"■ 支払い記録はあるのに、出金が見当たらない（払ったつもりの疑い）");
+    res.formOnly.forEach(function(f){line(box,md(f.date)+"　"+esc(f.vin)+"　"+fmt(f.amount)+"円（記録の"+f.row+"行目）","bad")});
+  }
+  var diffs=res.matched.filter(function(m){return m.diff!==0});
+  if(diffs.length){
+    section(box,"■ 合っているが、ズレあり");
+    diffs.forEach(function(m){line(box,md(m.date)+"　出金 "+fmt(m.amount)+"円／記録 "+m.count+"件で "+fmt(m.sum)+"円（差 "+m.diff+"円）"+(m.memo?"　メモ："+esc(m.memo):""))});
+  }
+  section(box,"■ 一致 "+res.matched.length+"件");
+  res.matched.forEach(function(m){line(box,"✓ "+md(m.date)+"　"+fmt(m.amount)+"円　"+esc(m.name.replace(/（\d+）/,""))+(m.count>1?"　（"+m.count+"件まとめ）":""),"good")});
+  if(res.memoed.length){
+    section(box,"■ 説明済み（メモあり）");
+    res.memoed.forEach(function(m){line(box,md(m.date)+"　"+fmt(m.amount)+"円　"+esc(m.memo),"mute")});
+  }
+}
+start();
+</script></body></html>
