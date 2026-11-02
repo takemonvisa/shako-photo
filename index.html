@@ -53,7 +53,9 @@ if(!cfg){$("title").textContent="QRを読み直してください";$("main").sty
  $("chassis").value=INIT.c||"";$("police").value=INIT.p||"";$("name").value=INIT.n||"";
  if(INIT.c){$("chassis").className="ro";$("chassis").readOnly=true}
  if(INIT.t==="uke"){$("f_uke").style.display="block";$("uketsuke").value=today()}
- if(INIT.t==="nouhin"){$("f_nouhin").style.display="block";$("nouhinDate").value=today();$("nouhinTime").value=nowTime()}
+ if(INIT.t==="nouhin"){$("f_nouhin").style.display="block";$("nouhinDate").value=today();$("nouhinTime").value=nowTime();
+  $("send").disabled=false;$("pick").textContent="📷 写真を撮る／選ぶ（なくても送れます）";
+  $("note").textContent="写真は任意です。撮る場合は、レタパ番号と許可証が一緒に写るように撮ってください。"}
  if(cfg.track){$("f_track").style.display="block";$("trackLabel").textContent=cfg.track}
 }
 $("pick").onclick=function(){$("file").click()};
